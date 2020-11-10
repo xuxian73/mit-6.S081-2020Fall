@@ -23,5 +23,5 @@ int main(int argc, char** argv) {
         wait(0);
         printf("%d: received pong\n", pid);
     }
-    exit(0);
+	exit(0);
 }
