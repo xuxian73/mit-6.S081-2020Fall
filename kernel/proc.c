@@ -695,3 +695,14 @@ procdump(void)
     printf("\n");
   }
 }
+
+uint64 nproc(){
+  uint64 cnt = 0;
+  for (struct proc* pp = proc; pp < &proc[NPROC]; pp++){
+    acquire(&pp->lock);
+    if (pp->state != UNUSED)
+      ++cnt;
+    release(&pp->lock);
+  }
+  return cnt;
+}
