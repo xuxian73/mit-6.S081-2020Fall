@@ -255,8 +255,6 @@ void proc_freekpagetable(pagetable_t kpagetable)
         uint64 child = PTE2PA(pte);
         proc_freekpagetable((pagetable_t)child);
       } 
-    } else if(pte & PTE_V) {
-      panic("proc_freekpagetable: leaf");
     }
   }
   kfree((void*)kpagetable);
@@ -286,6 +284,9 @@ void userinit(void)
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
 
+  // map pagetable to kernel pagetable
+  mapu2k(p->pagetable, p->kpagetable, 0, p->sz);
+  
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;     // user program counter
   p->trapframe->sp = PGSIZE; // user stack pointer
@@ -317,6 +318,7 @@ int growproc(int n)
   {
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
+  mapu2k(p->pagetable, p->kpagetable, p->sz, sz);
   p->sz = sz;
   return 0;
 }
@@ -357,6 +359,9 @@ int fork(void)
     if (p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
+
+  // map pagetable to kerneltable
+  mapu2k(np->pagetable, np->kpagetable, 0, np->sz);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
