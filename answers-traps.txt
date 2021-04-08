@@ -1,0 +1,3 @@
+He110 World
+0x726c6400, 57616 do not need to modify since it's viewed as a hex int.
+It's a random number which is in a1 register.
