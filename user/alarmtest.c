@@ -33,6 +33,7 @@ void
 periodic()
 {
   count = count + 1;
+  printf("%d\n", count);
   printf("alarm!\n");
   sigreturn();
 }
