@@ -66,19 +66,28 @@ usertrap(void)
 
     syscall();
   } else if (r_scause() == 13 || r_scause() == 15){
+    if(p->killed)
+      exit(-1);
     uint64 va = r_stval();
-    va = PGROUNDDOWN(va);
-    char *mem;
-    if ((mem = kalloc()) == 0) {
-      exit(-1);
+    if (va > p->sz || va < PGROUNDDOWN(p->trapframe->sp)) {
+      p->killed = 1;
+    } else {
+      va = PGROUNDDOWN(va);
+      char *mem;
+      if ((mem = kalloc()) == 0) {
+        p->killed = 1;
+      } else {
+        memset(mem, 0, PGSIZE);
+        if(mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+          kfree(mem);
+          p->killed = 1;
+        }
+      }
+    // vmprint(p->pagetable);
+    // printf("page fault: scause %p pid=%d\n", r_scause(), p->pid);
+    // printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      intr_on();
     }
-    memset(mem, 0, PGSIZE);
-    if(mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
-      kfree(mem);
-      exit(-1);
-    }
-    printf("page fault: scause %p pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
   }else if((which_dev = devintr()) != 0){
     // ok
   } else {
