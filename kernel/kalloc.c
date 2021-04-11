@@ -9,6 +9,11 @@
 #include "riscv.h"
 #include "defs.h"
 
+struct {
+  struct spinlock lock;
+  uint64 cnt[INDEX(PHYSTOP) + 1];
+} pageref;
+
 void freerange(void *pa_start, void *pa_end);
 
 extern char end[]; // first address after kernel.
@@ -26,6 +31,11 @@ struct {
 void
 kinit()
 {
+  initlock(&pageref.lock, "reflock");
+  acquire(&pageref.lock);
+  for (int i = 0; i < INDEX(PHYSTOP) + 1; ++i)
+    pageref.cnt[i] = 0;
+  release(&pageref.lock);
   initlock(&kmem.lock, "kmem");
   freerange(end, (void*)PHYSTOP);
 }
@@ -51,8 +61,17 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
+  acquire(&pageref.lock);
+  if (pageref.cnt[INDEX((uint64)pa)] > 1) {
+    --pageref.cnt[INDEX((uint64)pa)];
+    release(&pageref.lock);
+    return;
+  }
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
+
+  pageref.cnt[INDEX((uint64)pa)] = 0;
+  release(&pageref.lock);
 
   r = (struct run*)pa;
 
@@ -76,7 +95,23 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
-  if(r)
+  if(r) {
+    add_ref((uint64)r);
     memset((char*)r, 5, PGSIZE); // fill with junk
+  }
   return (void*)r;
+}
+
+void
+add_ref(uint64 pa) {
+  acquire(&pageref.lock);
+  ++pageref.cnt[INDEX(pa)];
+  release(&pageref.lock);
+}
+
+void
+dec_ref(uint64 pa) {
+  acquire(&pageref.lock);
+  --pageref.cnt[INDEX(pa)];
+  release(&pageref.lock);
 }

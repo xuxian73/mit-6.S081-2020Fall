@@ -65,6 +65,33 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if(r_scause() == 15) {
+    void* mem;
+    uint64 va = r_stval();
+    if (va >= MAXVA || (va <= PGROUNDDOWN(p->trapframe->sp) && va >= PGROUNDDOWN(p->trapframe->sp) - PGSIZE))
+    {
+      p->killed = 1;
+    }
+    pte_t* pte;
+    pte = walk(p->pagetable, va, 0);
+    uint64 pa = walkaddr(p->pagetable, va);
+    va = PGROUNDDOWN(va);
+    
+    if (!(*pte & PTE_COW)) {
+      p->killed = 1;
+    } else if ((mem = kalloc()) == 0) {
+      // need to malloc
+      p->killed = 1;
+    } else {
+      if (mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0) {
+        kfree((void*)mem);
+        p->killed = 1;
+      } else {
+        memmove(mem, (void*)pa, PGSIZE);
+        // if refenrence to the old page is one, set the old one as writable
+        kfree((void*)pa);
+      }
+    }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
